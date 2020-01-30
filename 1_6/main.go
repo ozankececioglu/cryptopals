@@ -38,10 +38,10 @@ var letterFreq = map[byte]float64{
 	'Z': 0.00059793009448438,
 }
 
-func calculateScore(arg <-chan byte) float64 {
+func calculateScore(arg []byte, key byte, start, step int) float64 {
 	letterCounts := make(map[byte]int)
-	letters := 0.0
-	for c := range arg {
+	for i := start; i < len(arg); i += step {
+		c := arg[i] ^ key
 		if c < byte(32) && c != '\n' && c != '\r' && c != '	' || c > byte(126) {
 			return -1.0
 		}
@@ -49,10 +49,10 @@ func calculateScore(arg <-chan byte) float64 {
 			c -= 32
 		}
 		letterCounts[c]++
-		letters += 1.0
 	}
 
 	score := 0.0
+	letters := math.Ceil((float64(len(arg)) - float64(start)) / float64(step))
 	for k, f := range letterFreq {
 		expected := f * letters
 		diff := float64(letterCounts[k]) - expected
@@ -106,7 +106,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	min := math.MaxFloat64
+	minDistance := math.MaxFloat64
 	var mink int
 	for k := 2; k <= 40; k++ {
 		total := 0.0
@@ -117,27 +117,20 @@ func main() {
 		}
 		av := total / float64(times)
 		fmt.Println(k, av)
-		if av < min {
-			min = av
+		if av < minDistance {
+			minDistance = av
 			mink = k
 		}
 	}
 
-	fmt.Println(min, mink)
+	fmt.Println("key", mink, minDistance)
 
 	cipher := make([]byte, mink)
 	fail := false
 	for i := 0; i < mink; i++ {
 		minScore := math.MaxFloat64
 		for x := byte(0); x < byte(128); x++ {
-			chnl := make(chan byte)
-			go func() {
-				for j := i; j < len(raw); j += mink {
-					chnl <- raw[j] ^ x
-				}
-				close(chnl)
-			}()
-			s := calculateScore(chnl)
+			s := calculateScore(raw, x, i, mink)
 			if s >= 0.0 && s < minScore {
 				minScore = s
 				cipher[i] = x
@@ -150,8 +143,7 @@ func main() {
 	}
 	if !fail {
 		fmt.Println(string(cipher))
-		repeatingXor(raw, cipher)
-		fmt.Println(string(raw))
+		fmt.Println(string(repeatingXor(raw, cipher)))
 	} else {
 		log.Fatal("cipher not found")
 	}

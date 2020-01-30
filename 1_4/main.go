@@ -39,10 +39,11 @@ var letterFreq = map[byte]float64{
 	'Z': 0.00059793009448438,
 }
 
-func calculateScore(arg <-chan byte) float64 {
+func calculateScore(arg []byte, key byte) float64 {
 	letterCounts := make(map[byte]int)
 	letters := 0.0
-	for c := range arg {
+	for _, c := range arg {
+		c ^= key
 		if c < byte(32) && c != '\n' && c != '\r' && c != '	' || c > byte(126) {
 			return -1.0
 		}
@@ -69,10 +70,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	for k, f := range letterFreq {
-		fmt.Println(k, f)
-	}
-
 	lines := strings.Split(string(dat), "\n")
 	var bestLine string
 	bestScore := math.MaxFloat64
@@ -86,15 +83,7 @@ func main() {
 		min := math.MaxFloat64
 		var key byte
 		for k := byte(32); k < byte(127); k++ {
-			chnl := make(chan byte)
-			go func() {
-				for _, c := range inputb {
-					chnl <- c ^ k
-				}
-				close(chnl)
-			}()
-
-			score := calculateScore(chnl)
+			score := calculateScore(inputb, k)
 			if score >= 0.0 && score < min {
 				min = score
 				key = k
