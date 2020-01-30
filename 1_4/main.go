@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"strings"
 )
 
@@ -38,27 +39,25 @@ var letterFreq = map[byte]float64{
 	'Z': 0.00059793009448438,
 }
 
-func strxor(str []byte, key byte) string {
-	resb := make([]byte, len(str))
-	for i, c := range str {
-		d := c ^ key
-		if d < 32 && d != '\n' && d != '\r' || d > 126 {
-			return ""
+func calculateScore(arg <-chan byte) float64 {
+	letterCounts := make(map[byte]int)
+	letters := 0.0
+	for c := range arg {
+		if c < byte(32) && c != '\n' && c != '\r' && c != '	' || c > byte(126) {
+			return -1.0
 		}
-		resb[i] = d
+		if c >= 'a' && c <= 'z' {
+			c -= 32
+		}
+		letterCounts[c]++
+		letters += 1.0
 	}
-	return strings.ToUpper(string(resb))
-}
 
-func calculateScore(a string) float64 {
 	score := 0.0
-	letters := 0
-	for _, c := range a {
-		f := letterFreq[byte(c)]
-		if f > 0.0 {
-			letters++
-		}
-		score += f
+	for k, f := range letterFreq {
+		expected := f * letters
+		diff := float64(letterCounts[k]) - expected
+		score += (diff * diff) / letters
 	}
 
 	return score
@@ -66,12 +65,17 @@ func calculateScore(a string) float64 {
 
 func main() {
 	dat, err := ioutil.ReadFile("4.txt")
-
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	for k, f := range letterFreq {
+		fmt.Println(k, f)
+	}
+
 	lines := strings.Split(string(dat), "\n")
+	var bestLine string
+	bestScore := math.MaxFloat64
 
 	for _, line := range lines {
 		inputb, err := hex.DecodeString(line)
@@ -79,25 +83,32 @@ func main() {
 			log.Fatal(err)
 		}
 
-		max := 0.0
+		min := math.MaxFloat64
 		var key byte
-		var sent string
-		for k := byte(0); k < byte(128); k++ {
-			res := strxor(inputb, k)
-			if len(res) == 0 {
-				continue
-			}
-			score := calculateScore(res)
-			if score > max {
-				sent = res
-				max = score
+		for k := byte(32); k < byte(127); k++ {
+			chnl := make(chan byte)
+			go func() {
+				for _, c := range inputb {
+					chnl <- c ^ k
+				}
+				close(chnl)
+			}()
+
+			score := calculateScore(chnl)
+			if score >= 0.0 && score < min {
+				min = score
 				key = k
 			}
 		}
-		if max > 0.0 {
-			fmt.Println("-----", max, key, string(key), sent)
+
+		if min < bestScore {
+			bestScore = min
+			for i := range inputb {
+				inputb[i] ^= key
+			}
+			bestLine = string(inputb)
+			fmt.Println(bestScore, bestLine)
 		}
-		key = key
-		sent = sent
 	}
+	fmt.Println(bestLine)
 }
