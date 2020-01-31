@@ -8,6 +8,11 @@ import (
 	"math"
 )
 
+const (
+	cipher_6_1 = "DO NOT OPEN THE DOOR!"
+	cipher_6_2 = "ASCII Table and Description"
+)
+
 var letterFreq = map[byte]float64{
 	' ': 0.18316857525301761,
 	'E': 0.10217877079731477,
@@ -95,16 +100,30 @@ func repeatingXor(input, key []byte) []byte {
 	return input
 }
 
-func main() {
-	dat, err := ioutil.ReadFile("6.txt")
-	if err != nil {
-		log.Fatal(err)
-	}
+func main2() {
+	inp := `Let KEYSIZE be the guessed length of the key; try values from 2 to (say) 40.
+	Write a function to compute the edit distance/Hamming distance between two strings. The Hamming distance is just the number of differing bits. The distance between:
+	this is a test
+	and
+	wokka wokka!!!
+	is 37. Make sure your code agrees before you proceed.
+	For each KEYSIZE, take the first KEYSIZE worth of bytes, and the second KEYSIZE worth of bytes, and find the edit distance between them. Normalize this result by dividing by KEYSIZE.
+	The KEYSIZE with the smallest normalized edit distance is probably the key. You could proceed perhaps with the smallest 2-3 KEYSIZE values. Or take 4 KEYSIZE blocks instead of 2 and average the distances.
+	Now that you probably know the KEYSIZE: break the ciphertext into blocks of KEYSIZE length.
+	Now transpose the blocks: make a block that is the first byte of every block, and a block that is the second byte of every block, and so on.
+	Solve each block as if it was single-character XOR. You already have code to do this.
+	For each block, the single-byte XOR key that produces the best looking histogram is the repeating-key XOR key byte for that block. Put them together and you have the key.`
+	out := base64.StdEncoding.EncodeToString(repeatingXor([]byte(inp), []byte("Break repeating-key XOR")))
+	ioutil.WriteFile("6_3.txt", []byte(out), 777)
+}
 
-	raw, err := base64.StdEncoding.DecodeString(string(dat))
+func main() {
+
+	dat, err := ioutil.ReadFile("6_3.txt")
 	if err != nil {
 		log.Fatal(err)
 	}
+	raw, err := base64.StdEncoding.DecodeString(string(dat))
 
 	minDistance := math.MaxFloat64
 	var mink int
@@ -112,7 +131,7 @@ func main() {
 		total := 0.0
 		times := 0
 		for i := k + k; i < len(raw); i += k {
-			total += float64(hummingDistance(raw[i - k - k:i - k], raw[i - k:i])) / float64(k)
+			total += float64(hummingDistance(raw[i-k-k:i-k], raw[i-k:i])) / float64(k)
 			times++
 		}
 		av := total / float64(times)
@@ -129,15 +148,23 @@ func main() {
 	fail := false
 	for i := 0; i < mink; i++ {
 		minScore := math.MaxFloat64
-		for x := byte(0); x < byte(128); x++ {
+		fmt.Println("--------", i)
+		for x := byte(32); x < byte(128); x++ {
 			s := calculateScore(raw, x, i, mink)
 			if s >= 0.0 && s < minScore {
+				if x > 32 {
+					fmt.Println("!###", string(x), s)
+				} else {
+					fmt.Println("!###", x, s)
+				}
+
 				minScore = s
 				cipher[i] = x
 			}
 		}
 		if cipher[i] == 0 {
 			fail = true
+			log.Fatal("cipher not found", i)
 			break
 		}
 	}
@@ -145,6 +172,6 @@ func main() {
 		fmt.Println(string(cipher))
 		fmt.Println(string(repeatingXor(raw, cipher)))
 	} else {
-		log.Fatal("cipher not found")
+
 	}
 }
